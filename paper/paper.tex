@@ -11,6 +11,7 @@
 \usepackage{setspace}           % line spacing control
 \usepackage{abstract}           % abstract formatting
 \usepackage{tabularx}           % auto-width tables
+\usepackage{hyperref}           % hyperlinks and URL handling
 
 % --- Column separation ---
 \setlength{\columnsep}{0.7cm}
@@ -20,8 +21,19 @@
 \titlespacing*{\subsection}{0pt}{0.6em}{0.3em}
 
 % --- Title ---
-\title{\textbf{QuantumBradford}}
-\author{}
+\title{\textbf{Quantum Chaos Indicators for Tropical Cyclone Rapid Intensification:}\\
+\textbf{An OTOC-Based Early-Warning Framework Using PCA-Compressed Atmospheric Fields}}
+
+\author{
+Niru Sandhu \\ University of Stirling \\
+\and
+Dr.~Kulvinder Panesar \\ University of Bradford \\
+\and
+Sebastian Kot \\ City, University of London \\
+\and
+\small{University of Bradford Quantum Hackathon 2025}
+}
+
 \date{November 2025}
 
 \begin{document}
@@ -30,10 +42,18 @@
   \maketitle
   \begin{onecolabstract}
       \noindent
-      TBA. % Replace with your abstract
+      Tropical cyclone rapid intensification (RI) remains among the most challenging phenomena in operational weather forecasting, with current numerical models achieving only 60--65\% detection rates at 24-hour lead times. We present the first application of quantum chaos diagnostics to real-world atmospheric prediction, demonstrating that the Out-of-Time-Order Correlator (OTOC)—a quantum information metric quantifying scrambling dynamics—can detect RI-prone atmospheric states in observed cyclone data.
+
+      Using ERA5 reanalysis fields from Cyclone Dikeledi (January 2025, Mozambique Channel), we develop a novel encoding pipeline: (1) compress 700~hPa temperature anomalies from a $41 \times 41$ spatial grid (1681 points) to 8 dominant empirical orthogonal functions (EOFs) via principal component analysis, capturing 85\% of variance; (2) map each EOF amplitude to a single qubit state using rotation angles derived from mode energy; (3) construct a time-dependent 8-qubit Ising Hamiltonian where coupling strengths $J(t)$ and local fields $h(t)$ are computed directly from atmospheric temperature gradients. We execute OTOC echo circuits (depth $\approx$70 gates, 1000 shots per timestep) on the Quantinuum H1-Emulator across 6 representative snapshots spanning the cyclone's lifecycle.
+      
+      The OTOC exhibits a sharp decay from $F = 0.83$ (low scrambling, organized state) to $F = -0.16$ (high scrambling, chaotic state) during timesteps 2--4, preceding visible intensification in classical meteorological fields by 12--18 hours. Statistical validation confirms OTOC tracks physical instability: moderate negative correlation with gradient magnitude (Pearson $r = -0.50$, $p < 0.05$) and strong correlation with instantaneous gradient changes ($r = -0.61$ for $\Delta$OTOC vs.\ $\Delta|\nabla T|$). Critically, OTOC passes null-model tests (absolute correlation with physical gradients 0.50 vs.\ 0.30 with synthetic noise), while a classical variance proxy fails the same criterion (0.07 vs.\ 0.20). Temporal analysis reveals OTOC functions as a real-time sensitivity diagnostic rather than a predictive model: weak correlation with next-timestep changes ($r = 0.24$) but strong synchronous response to current atmospheric state.
+      
+      Our results establish three key findings: (1) quantum information scrambling provides a viable conceptual framework for understanding RI as a dynamical phase transition; (2) OTOC computed from low-dimensional EOF representations captures physically meaningful chaos signatures inaccessible to simple statistical metrics; (3) quantum circuits of modest depth ($<$100 gates) can diagnose atmospheric instability with computational cost potentially lower than classical ensemble-based methods. This work opens a pathway toward operational quantum-enhanced early-warning systems for tropical cyclone forecasting and demonstrates the broader applicability of quantum chaos theory to Earth system prediction.      
   \end{onecolabstract}
   \vspace{1em}
 ]
+
+\noindent The full codebase that implements this study is available at \url{https://github.com/sebinkooooo/OTOC-Cyclone-Prediction}.
 
 \section{Introduction}
 \subsection{The Rapid Intensification Problem}
