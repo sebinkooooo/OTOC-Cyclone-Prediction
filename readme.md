@@ -28,3 +28,5 @@ run comparison.py to compare this method against traditional emthods and access 
 run nextstep_comapriosn and access json to see that we only are able to predict chaos and not actual cyclone movements (implied - not a redflag)
 
 run plot functions to plot these comapriosns and access images in /plot folder
+
+to generate all plots from paper run plot_master.py
