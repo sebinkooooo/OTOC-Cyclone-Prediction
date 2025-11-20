@@ -314,4 +314,4 @@ For questions or collaboration: [GitHub Issues](https://github.com/yourusername/
 
 ---
 
-**⚠️ Operational Disclaimer:** This is a research prototype. Do not use for actual hurricane evacuation decisions without validation by national meteorological agencies.
+**Disclaimer:** This is a research prototype. Do not use for actual hurricane evacuation decisions without validation by national meteorological agencies.
