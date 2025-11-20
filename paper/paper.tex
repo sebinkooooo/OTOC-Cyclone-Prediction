@@ -1,0 +1,316 @@
+\documentclass[twocolumn]{article}
+
+% --- Packages ---
+\usepackage[a4paper, left=1.5cm, right=1.5cm, top=1.8cm, bottom=1.8cm]{geometry}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{times}              % academic font
+\usepackage{titlesec}           % tighter section spacing
+\usepackage{setspace}           % line spacing control
+\usepackage{abstract}           % abstract formatting
+
+% --- Column separation ---
+\setlength{\columnsep}{0.7cm}
+
+% --- Section formatting ---
+\titlespacing*{\section}{0pt}{0.8em}{0.4em}
+\titlespacing*{\subsection}{0pt}{0.6em}{0.3em}
+
+% --- Title ---
+\title{\textbf{QuantumBradford}}
+\author{}
+\date{November 2025}
+
+\begin{document}
+
+\twocolumn[
+  \maketitle
+  \begin{onecolabstract}
+      \noindent
+      TBA. % Replace with your abstract
+  \end{onecolabstract}
+  \vspace{1em}
+]
+
+\section{Introduction}
+TBA
+
+\section{Mathematical Framework}
+This section provides a detailed and coherent mathematical framework that transforms atmospheric fields into a compressible Principal Component Analysis (PCA) representation applied to quantum states and evolves them under a physics-derived Ising Hamiltonians, which are evaluated using OTOC and a debugging variance metric.
+
+\subsection{Atmospheric Data Representation}
+\subsubsection{Dataset and Notation}
+We obtain a 2-dimensional temperature field from ERA5 at a fixed 700hPa (~3km altitude) height, which is the critical level for cyclone dynamics, as it captures a balance of between lower-tropospheric thermodynamics and mid-tropospheric dynamics that drive cyclone behavior (ref.).\\
+
+This data is obtained with a resolution  of \(0.25° × 0.25°\), giving approximately 30km spacial resolution. The 2D plane has a temporal dimension with a discrete interval of 6 hours. \\
+
+In this paper, we use the Mozambique channel ([-20°, -10°] × [40°, 50°])  during the real cyclone Dikledi, which occurred between January 10-12, 2025.  \\
+
+Thus the raw input received takes the form \(T_\text{raw}[t, i, j]\) where \(T\) is the temperature at coordinates \(i,j\) at time \(t\).
+
+\subsubsection{Detrending (removing spatial mean)}
+We compute the average temperature of the whole region at a specific timestep:
+\[\mu(t) = \frac{1}{N_x N_y} \sum_{i,j} T_{\text{raw}}(t, i, j)\]
+and subtract this from every point such that:
+
+\[\tilde{T}(t, i, j) = T_{\text{raw}}(t, i, j) - \mu(t)\]
+This transforms our raw dataset into an anomaly field, which allows us to examine the structure.
+
+\subsubsection{Flatten Spatial Grid}
+For each time $t$, we convert the two–dimensional anomaly field 
+$\tilde{T}(t,i,j)$ into a single column vector by flattening:
+\[
+x^{(t)} = \operatorname{vec}\!\left(\tilde{T}(t, i, j)\right)
+\in \mathbb{R}^{D},
+\qquad
+D = N_x N_y.
+\]
+This reformatting allows us to preform PCA analysis naitvely.
+
+\subsection{PCA Analysis}
+Cyclone temperature fields contain mixtures of localized recurring spatial structures such as asymmetric lobes, rainband patterns and other mesoscale variations. The goal is to be be able to represent the cyclon's temperature field in a compressed method that captures as much expressivity (variance) as possible.\\
+
+PCA identifies a fixed set of spatial nodes, called Empirical Orthogonal Functions (EOFs) which represent the patterns which account for greatest variance in the dataset. The main advantage of PCA modeling is that it learns from all time steps simultaneously. This ensures that the basis is consistent across time and reflects the dominant structures present in the cyclone's full evolution.\\
+
+PCA is a preferred meteorological approach due to its single data-driven spatial basis that is valid across all timesteps. Methods such as Fourier Decomposition (FD) struggle with evolving structures because FD represents the field using fixed sinusoidal modes tied to the coordinate system, and not to the moving structure itself. Representing moving structures in FD would require an individual spatial basis at each timestep. For any downstream dynamical model (including the OTOC-based quantum evolution in our framework), this would be equivalent to modeling a different fingerprint at each timestep, rather than the coherent evolution of a single physical state.
+
+\subsubsection{Covariance Calculation}
+We calculate the covariance matrix , as this tells us how each gridpoint covaries with every other gridpoint, over all timesteps. This is calculated as:
+\[C=\frac{1}{N_{\text{time}}} X^\top X\]
+
+\subsubsection{Eigen-decomposition}
+\[Cv_i = \lambda_i v_i\]
+Eigenvalue decomposition of the covariance matrix finds the dominant spatial patterns (eigenvectors) and orders them by importance (eigenvalues). Sorting this in descending order gives us a physically meaningful representation of cyclone structure.
+
+In our framework, we retain the first eight eigenvectors 
+$\{v_1,\dots,v_8\}$ as the fixed spatial basis used for all timesteps.
+
+We choose 8 in this paper as the meaningful spatial basis due to current limitations of quantum hardware, as each spatial basis will be represented by a single qubit in later sections. This can be expanded to more bases, given access to more advanced quantum hardware. It is also necessary to note that adding more basis makes engineering sense only if their addition improve variance by a substantial amount. 
+
+\subsubsection{Project each time snapshot into 8D basis}
+For each timestep $t$, we have a flattened anomaly field $x^{(t)} \in \mathbb{R}^{D}$, as well as the matrix of 8 eigenvectors, $V = [v_1, v_2, \ldots, v_8] \in \mathbb{R}^{D \times 8}$., where each $v_k$ is a spatial basis (EOF). \\
+
+To now express $x^{(t)}$ in this new basis, we compute:
+\[\mathbf{c}^{(t)} = V^\top x^{(t)} \quad \in \mathbb{R}^{8}\]
+where each component: $c_k^{(t)} = \langle x^{(t)}, v_k \rangle$ is the projection of the snapshot onto the $k$-th spatial pattern, measuring their alignment. Intuitively, we project every timestep's anomaly field onto the top-8 bases and compute dot-products to obtain how much of each spatial basis is in the anomaly field (temperature field). 
+
+\subsubsection{Converting alignment coefficients into qubit amplitudes}
+To be able to model cyclone behavior on quantum computers, we aim to convert each of the 8th spatial basis onto individual qubit. Given that each qubit will represent 1 spatial basis, we need to normalize the alignment coefficients $c^{(t)}$ into non-negative probabilites such that $\sum_k \alpha_k^{(t)} = 1,\qquad \alpha_k^{(t)} \ge 0$. 
+
+This can be done by defining $a_k^{(t)} = (c_k^{(t)})^2$  and normalizing:
+\[\alpha_k^{(t)} = \frac{a_k^{(t)}}{\sum_{j=1}^8 a_j^{(t)}}\]
+
+Thus each $\alpha_k^{(t)}$ enocdes the fraction of the total atmospheric variance that is explained by mode $k$ at time $t$. 
+
+\subsection{Qubit Encoding}
+\subsubsection{Single qubit amplitude mapping}
+Given that one qubit, $q_k$ represents one EOF, we modelt the qubit's state as:
+\[|q_k^{(t)}\rangle = \sqrt{\alpha_k^{(t)}} |0\rangle + \sqrt{1 - \alpha_k^{(t)}} |1\rangle\]
+To actually prepare the qubit in hardware we apply the $R_y$ gate, building a qubit representation using $\sin(\theta_k^{(t)}/2) = \sqrt{\alpha_k^{(t)}}$ to correctly lean towards the right probability distribution. Formally:
+
+\[\theta_k^{(t)} = 2\arcsin\left(\sqrt{\alpha_k^{(t)}}\right)\]
+Thus we now prepare all 8 qubits as:
+
+\[|\psi^{(t)}\rangle = \bigotimes_{k=1}^8 |q_k^{(t)}\rangle\]
+\subsection{Hamiltonian Construction}
+
+We require a quantum dynamical model that will evolve the qubit state to reflect atmospheric patterns. We build a synthetic 8-qubit Hamiltonian where each term is derived from the meteorological features of the atmosphere. Specifically, we are using gradients (temperature change) as these drive dynamics. The objective is to construct a Hamiltonian (8 qubit Ising Model):
+\[H(t) = \sum_{i=0}^{7} h_i(t) X_i + \sum_{i=0}^{6} J_{i,i+1}(t) Z_i Z_{i+1}\]
+With all quantities derived from atmospheric gradients. In meteorology, strong gradients imply more dynamic behavior, more variability and thus more general chaos.
+
+\subsubsection{Computing Gradients}
+Given  ${T_{\text{detrended}}[t, i, j]}$  derived in the earlier section, we compute the finite differences:
+\[\partial_x T \approx T(i+1,j) - T(i-1,j)\]
+\[\partial_y T \approx T(i,j+1) - T(i,j-1)\]
+
+We preform two gradient calculations as temperature varies across two spatial dimensions. This then allows us to compute the gradient magnitude:
+\[g^{(t)}(i,j)=\sqrt{(\partial_xT)^2+(\partial_yT)^2}\]
+This is a scalar value, that tells us how sharp the temperature change is at a specific gridpoint. We also compute the mean and spread, $\mu_{\nabla}(t), \quad \sigma_{\nabla}(t)$ of every gradient field.
+
+\subsubsection{Computing Coupling Strengths}
+The mean and spread allow us to compute Ising couplings, $J_{i,i+1}(t)$, which measures how storngly two gridpoints interact, thus the effect of one temperature value on the next. In the qubit representaiton, this will be translated to how strongly qubit $i$ interacts with others. We compute this using the equation:
+\[J_{i,i+1}(t) = \gamma \, \mu_\nabla(t)\]
+With $\gamma$ being a tunable hyperparamater. The local fields $h_i(t)$ are a measure of how strongly qubit $i$ wants to flip, denoted as:
+
+\[h_i(t) = \beta \, \sigma_\nabla(t) \left(0.5 + \frac{i}{16}\right)\]
+where $\beta$ is another scaling parameter, and $(0.5 + \frac{i}{16})$ introduces structure across modes assigning higher importance to EOFs (spatial bases) that capture more variance of the dataset. 
+
+For this paper's practical implementation, we set $\gamma = \beta = 1$ to keep the model simple and avoid arbitrary tuning.  As mentioned, the hyperparameters control the scale of the Hamiltonian and therefore the strength of the interactions. Given our goal to study relative chaos growth, the choice is not physically constrained. Any constant scaling rescales time in the unitary evolution, and should not have an effect on the qualitative structure of OTOC growth. It makes sense to tune these hyperparameters if inputs from gradients are too weak or strong.
+
+\subsubsection{Hamiltonian Summary}
+
+Thus, for every timestep, the Hamiltonian is expressed as:
+\[H(t)
+= \sum_{i=0}^{7} h_i(t)\, X_i
+\;+\;
+\sum_{i=0}^{6} J_{i,i+1}(t)\, Z_i Z_{i+1},\]
+Where $X_i$ is the Pauli-X operator acting on qubit $i$ (measures tendency for qubit to change state), and $Z_i$ is the Pauli-Z operator acting on qubit $i$ (measures whether qubit is alligned with the computational basis). 
+
+\subsubsection{Time Evolution}
+The aim now is to evolve the Hamiltonian over time and study the synthetic quantum system . This is done using the quantum evolution operator which simulates how the HAmitlonina evolves over tiny timestep $\Delta \tau$.
+
+\subsubsection{Time Evolution Equation Approximaiton}
+We approximate the Time evolution equation $U(t;\Delta \tau) = \exp\big(-i H(t)\Delta\tau \big)$ using a first-order Trotter:
+\[U(t;\Delta\tau) \approx \big[ e^{-i H_Z \delta} e^{-i H_X \delta} \big]^n\]
+which breaks down the Hamiltonian into the local fields ($H_x$)and couplings ($H_z$), as generally quantum hardware cannot apply this directly. Where $\Delta\tau$ is the total evolution time, $n$ is the number of Trotter steps, and $\delta = \Delta\tau/n$ is the small timestep applied at each step.
+
+\subsubsection{Gate Level Decomposition}
+From the Trotter step, a $ZZ$ interaction term $e^{-i J Z_i Z_{i+1}\,\delta}$ and a single-qubit X rotation $e^{-i h_i X_i\,\delta}$ need to be applied, which can tbe directly implemented by quantum hardware (two-qubit entangling unitary). Thus it must be deocomposed into actual gates.
+
+The $ZZ$ term decoomposition can be built using a circuit which has the same effect using basic gates. This sequence comprises of a $CNOT$-$R_z$-$CNOT$-$R_z$$(\theta/2)$ gate combination which creates a controlled phase shift with the extra $R_z$ symmetrizing the phase so the net effect is the ideal $ZZ$ evolution (Figure \ref{zz_circuit}). 
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{Screenshot 2025-11-19 at 04.18.25.png}
+    \caption{$ZZ$ gate combination}
+    \label{zz_circuit}
+\end{figure}
+The X term, $e^{-i h_i X_i \delta}$, is is simply a rotation around the X axis of the Bloch sphere, which can be implemented by the native $R_x$ gate, $R_x(\phi)
+= e^{-i \frac{\phi}{2} X }$ , thus to match coefficients we implement: $e^{-i h_i X_i \delta}
+= R_x(2h_i\delta)$. 
+
+Thus in pseudocode (Algorithm 1), to obtain the Hamiltonian evolving over time, $U(t)$:
+
+\begin{algorithm}[H]
+\caption{Trotterized Time Evolution}
+\begin{algorithmic}
+\STATE $U_t \gets \mathbf{I}$
+\FOR{each Trotter step}
+    \STATE Apply ZZ rotations
+    \STATE Apply X rotations
+\ENDFOR
+\end{algorithmic}
+\end{algorithm} 
+\subsection{Out-Of-Time-Order Correlator (OTOC)}
+
+The OTOC is defined as:
+\[
+F(t) = \big\langle W^\dagger(t)\, V^\dagger(0)\, W(t)\, V(0) \big\rangle,
+\qquad
+W(t) = U^\dagger(t)\, W\, U(t).
+\]
+It measures how strongly a small perturbation applied at time $0$ (via $V$) affects a later observable at time $t$ (via $W$).  
+A rapid decay of $F(t)$ indicates high sensitivity to initial conditions and is therefore a widely-used diagnostic of quantum chaos.
+
+In our setting, we choose simple Pauli operators:
+\[
+V = X_0, \qquad W = X_1,
+\]
+where $X_i$ acts on qubit $i$. These operators inject and probe perturbations across the qubit chain.
+
+\subsubsection{Echo Circuit Implementation}
+
+Evaluating the OTOC requires a specially designed ``echo'' sequence that alternates forward and backward time evolution.  
+This ensures that scrambling (information spreading) is isolated from trivial phase evolution.  
+The full protocol is summarised in Algorithm~\ref{alg:otoc}, which follows the standard echo construction used in quantum simulation.
+
+\begin{algorithm}[H]
+\caption{OTOC Echo Circuit}
+\label{alg:otoc}
+\begin{algorithmic}[1]
+\REQUIRE Initial state $\ket{\Psi}$; perturbation operators $V$ and $W$; time-evolution operator $U$
+\ENSURE OTOC value $F(t)$
+
+\STATE Prepare the initial state $\ket{\Psi}$
+\STATE Apply perturbation $V$ to qubit $0$
+\STATE $\ket{\Psi} \leftarrow U\,\ket{\Psi}$ \COMMENT{Forward time evolution}
+\STATE Apply operator $W$ to qubit $1$
+\STATE $\ket{\Psi} \leftarrow U^\dagger\,\ket{\Psi}$ \COMMENT{Backward time evolution}
+\STATE Apply $V$ again to qubit $0$
+\STATE $\ket{\Psi} \leftarrow U\,\ket{\Psi}$ \COMMENT{Forward time evolution}
+\STATE Apply $W$ again to qubit $1$
+\STATE Measure the final observable to obtain $F(t)$
+\STATE \RETURN $F(t)$
+
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{OTOC Emulator Proxy}
+Given OTOC's compelxity and limitations on an emulator, we also propose a "debug" surrogate quantity which correlates with the OTOC protocol, in the form of a variance measurement which calculates the entropy of the energy distribution across the 8 EOF models at time t, given as:
+
+
+\[\text{Variance}(\alpha^{(t)}) = \frac{1}{8} \sum_k (\alpha_k^{(t)} - \bar{\alpha})^2\]
+for $\bar{\alpha}^{(t)} = \frac{1}{8}\sum_{k=1}^8 \alpha_k^{(t)}.$.
+
+\subsection{Coherent Pseudocode}
+The whole protocol can be summarised using the following pseudocode (Algorithm 3):
+
+\begin{algorithm}[H]
+\caption{Cyclone Quantum Encoding and OTOC Pipeline}
+\begin{algorithmic}[1]
+
+\FOR{each cyclone}
+
+    \STATE \textbf{LOAD\_ERA5\_DATA}()
+    \STATE $T_{\text{raw}} \leftarrow$ raw temperature fields
+
+    \STATE \textbf{DETREND\_SPATIALLY}($T_{\text{raw}}$)
+    \STATE $T_{\text{detrended}} \leftarrow T_{\text{raw}} - \text{spatial\_mean}(T_{\text{raw}})$
+
+    \STATE \textbf{FLATTEN\_FIELDS}($T_{\text{detrended}}$)
+    \STATE $X \leftarrow$ matrix of flattened anomaly fields
+
+    \STATE \textbf{COMPUTE\_PCA\_BASIS}($X$)
+    \STATE $V \leftarrow$ top--8 eigenvectors of covariance($X$)
+
+    \STATE \textbf{PROJECT\_INTO\_8D}($X, V$)
+    \STATE $C \leftarrow V^\top X$ \COMMENT{8D PCA coefficients}
+
+    \STATE \textbf{COMPUTE\_AMPLITUDES}($C$)
+    \STATE $\alpha_k^{(t)} \leftarrow \frac{(c_k^{(t)})^2}{\sum_j (c_j^{(t)})^2}$
+
+    \STATE \textbf{COMPUTE\_ROTATION\_ANGLES}($\alpha$)
+    \STATE $\theta_k^{(t)} \leftarrow 2\arcsin\!\left(\sqrt{\alpha_k^{(t)}}\right)$
+
+    \STATE \textbf{COMPUTE\_GRADIENTS}($T_{\text{detrended}}$)
+    \STATE $\mu_{\nabla}(t),\ \sigma_{\nabla}(t) \leftarrow$ mean and std of gradient magnitude
+
+    \STATE \textbf{COMPUTE\_ISING\_PARAMETERS}()
+    \STATE $J(t) \leftarrow \gamma\,\mu_{\nabla}(t)$
+    \STATE $h_i(t) \leftarrow \beta\,\sigma_{\nabla}(t)\left(0.5 + \frac{i}{16}\right)$
+
+    \STATE \textbf{BUILD\_HAMILTONIAN}($J(t), h(t)$)
+    \STATE $H(t) = \sum_i h_i(t) X_i + \sum_i J(t)\, Z_i Z_{i+1}$
+
+    \STATE \textbf{BUILD\_UNITARY\_U}(H(t))
+    \STATE $U(t) \approx \prod_{\text{Trotter step}} \big( U_{ZZ}\,U_X \big)$
+
+    \FOR{each time snapshot $t$}
+
+        \STATE \textbf{PREPARE\_STATE}($\theta^{(t)}$)
+        \STATE $\ket{\Psi^{(t)}} = \bigotimes_{k=1}^{8} \big( R_y(\theta_k^{(t)})\ket{0} \big)$
+
+        \IF{running on quantum hardware or simulator}
+            \STATE \textbf{RUN\_OTOC\_ECHO\_CIRCUIT}($\ket{\Psi^{(t)}}, U(t)$)
+            \STATE $F(t) \leftarrow$ OTOC measurement
+        \ELSE
+            \STATE \textbf{COMPUTE\_VARIANCE\_PROXY}($\alpha^{(t)}$)
+            \STATE $F(t) \leftarrow \frac{1}{8}\sum_k (\alpha_k^{(t)} - \bar{\alpha})^2$
+        \ENDIF
+
+    \ENDFOR
+
+\ENDFOR
+
+\end{algorithmic}
+\end{algorithm}
+
+\subection{Algorithm Outcome Relinked to RI}
+The outcome of the OTOC calculation is a direct quantitative measure of information scrambling in the 8-qubit atmospheric representation. The OTOC measures how quickly a perturbation injected into one mode spreads across other modes.\\
+
+More specifically, the OTOC (or its variance proxy) provides an early signal of RI, because information scrambling accelerates before peak surface winds (ref.) and before visible structural changes appear in traditional meteorological fields.
+
+\section{Implementation and Results}
+TBA
+
+\section{Conclusion}
+TBA
+
+\section{Next Steps}
+TBA
+
+
+
+
+\end{document}

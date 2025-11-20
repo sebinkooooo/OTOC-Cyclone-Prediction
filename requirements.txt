@@ -1,0 +1,10 @@
+numpy
+xarray
+netCDF4
+scikit-learn
+matplotlib
+pytket
+pytket-quantinuum
+qnexus
+matplotlib
+scipy
